@@ -93,15 +93,20 @@ class OrderController extends Controller
             if ($validated['payment_method'] === 'qris') {
                 Configuration::setXenditKey(config('services.xendit.secret_key'));
                 $invoiceApi = new InvoiceApi();
+                $merchantId = config('services.xendit.merchant_id', '9988123');
 
-                $externalId = 'KEJORA-' . $order->id . '-' . Str::upper(Str::random(6));
+                $externalId = 'KEJORA-' . $merchantId . '-' . $order->id . '-' . Str::upper(Str::random(4));
                 $requestBody = new CreateInvoiceRequest([
                     'external_id' => $externalId,
-                    'description' => 'KejoraCash Order #' . $order->id,
+                    'description' => 'Merchant ID ' . $merchantId . ' • Pesanan #' . $order->id,
                     'amount' => $totalAmount,
                     'currency' => 'IDR',
                     'success_redirect_url' => config('services.xendit.success_url'),
                     'failure_redirect_url' => config('services.xendit.failure_url'),
+                    'metadata' => [
+                        'merchant_id' => $merchantId,
+                        'order_code' => $order->midtrans_order_id ?? $order->id,
+                    ],
                 ]);
 
                 $invoice = $invoiceApi->createInvoice($requestBody);

@@ -32,6 +32,7 @@ return [
         'secret_key' => env('XENDIT_SECRET_KEY'),
         'public_key' => env('XENDIT_PUBLIC_KEY'),
         'callback_token' => env('XENDIT_CALLBACK_TOKEN'),
+        'merchant_id' => env('XENDIT_MERCHANT_ID', '9988123'),
         'success_url' => env('XENDIT_SUCCESS_URL', 'http://localhost:3000/order?status=success'),
         'failure_url' => env('XENDIT_FAILURE_URL', 'http://localhost:3000/order?status=failed'),
     ],
