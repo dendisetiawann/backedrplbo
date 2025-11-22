@@ -12,6 +12,7 @@ Route::prefix('public')->group(function () {
     Route::get('/menus', [OrderController::class, 'publicMenus']);
     Route::post('/orders', [OrderController::class, 'publicStore']);
     Route::get('/orders/{order}', [OrderController::class, 'publicShow']);
+    Route::post('/orders/{order}/mark-paid', [OrderController::class, 'publicMarkPaid']);
     Route::post('/payment/notify', [MidtransController::class, 'handleNotification']);
     Route::post('/payment/xendit-notify', [XenditController::class, 'handleCallback']);
 });

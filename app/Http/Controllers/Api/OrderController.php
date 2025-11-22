@@ -136,11 +136,47 @@ class OrderController extends Controller
         return response()->json($order->load('items.menu'));
     }
 
+    public function publicMarkPaid(Request $request, Order $order)
+    {
+        if ($order->payment_method !== 'qris') {
+            return response()->json([
+                'message' => 'Metode pembayaran tidak mendukung pembaruan otomatis.',
+            ], 422);
+        }
+
+        $updates = [];
+        $message = 'Pembayaran berhasil ditandai lunas.';
+
+        if ($order->payment_status !== 'dibayar') {
+            $updates['payment_status'] = 'dibayar';
+        } else {
+            $message = 'Pembayaran sudah ditandai lunas.';
+        }
+
+        if ($order->order_status === 'baru') {
+            $updates['order_status'] = 'diproses';
+            $message = 'Pembayaran berhasil diverifikasi dan pesanan mulai diproses.';
+        }
+
+        if (! empty($updates)) {
+            $order->update($updates);
+        }
+
+        return response()->json([
+            'message' => $message,
+            'order' => $order->load('items.menu'),
+        ]);
+    }
+
     public function index(Request $request)
     {
         $orders = Order::with('items.menu')
             ->when($request->query('order_status'), fn ($query, $status) => $query->where('order_status', $status))
             ->when($request->query('payment_status'), fn ($query, $status) => $query->where('payment_status', $status))
+            ->where(function ($query) {
+                $query->where('payment_method', '!=', 'qris')
+                    ->orWhere('payment_status', 'dibayar');
+            })
             ->orderByDesc('created_at')
             ->get();
 
