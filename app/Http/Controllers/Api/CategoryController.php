@@ -18,6 +18,9 @@ class CategoryController extends Controller
     {
         $data = $request->validate([
             'name' => ['required', 'string', 'max:255', 'unique:categories,name'],
+        ], [
+            'name.required' => 'Nama kategori tidak boleh kosong.',
+            'name.unique' => 'Nama kategori sudah digunakan.',
         ]);
 
         $category = Category::create($data);
@@ -39,6 +42,9 @@ class CategoryController extends Controller
                 'max:255',
                 Rule::unique('categories')->ignore($category->id),
             ],
+        ], [
+            'name.required' => 'Nama kategori tidak boleh kosong.',
+            'name.unique' => 'Nama kategori sudah digunakan.',
         ]);
 
         $category->update($data);

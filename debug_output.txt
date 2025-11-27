@@ -1,0 +1,21 @@
+--- Raw Menus Data ---
+Menu ID: 1, Name: Es Kopi Susu Kejora, Category ID: 1 (Type: integer)
+Menu ID: 2, Name: Latte Hangat, Category ID: 2 (Type: integer)
+Menu ID: 3, Name: Nasi Goreng Kejora, Category ID: 3 (Type: integer)
+Menu ID: 4, Name: Roti Bakar Cokelat, Category ID: 4 (Type: integer)
+Menu ID: 5, Name: Kentang Goreng Truffle, Category ID: 4 (Type: integer)
+Menu ID: 6, Name: Matcha Latte, Category ID: 1 (Type: integer)
+
+--- Raw Categories Data ---
+Category ID: 4, Name: Camilan (Type: integer)
+Category ID: 3, Name: Makanan Berat (Type: integer)
+Category ID: 1, Name: Minuman Dingin (Type: integer)
+Category ID: 2, Name: Minuman Hangat (Type: integer)
+Category ID: 5, Name: untukmu (Type: integer)
+
+--- Raw SQL Query Test ---
+Category: Minuman Dingin (ID: 1) - Menu Count: 2
+Category: Minuman Hangat (ID: 2) - Menu Count: 1
+Category: Makanan Berat (ID: 3) - Menu Count: 1
+Category: Camilan (ID: 4) - Menu Count: 2
+Category: untukmu (ID: 5) - Menu Count: 0

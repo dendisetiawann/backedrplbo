@@ -95,17 +95,17 @@ class OrderController extends Controller
                 $invoiceApi = new InvoiceApi();
                 $merchantId = config('services.xendit.merchant_id', '9988123');
 
-                $externalId = 'KEJORA-' . $merchantId . '-' . $order->id . '-' . Str::upper(Str::random(4));
+                $externalId = $order->order_number;
                 $requestBody = new CreateInvoiceRequest([
                     'external_id' => $externalId,
-                    'description' => 'Merchant ID ' . $merchantId . ' • Pesanan #' . $order->id,
+                    'description' => 'Pembayaran Pesanan ' . $order->order_number . ' - ' . $order->customer_name,
                     'amount' => $totalAmount,
                     'currency' => 'IDR',
                     'success_redirect_url' => config('services.xendit.success_url'),
                     'failure_redirect_url' => config('services.xendit.failure_url'),
                     'metadata' => [
                         'merchant_id' => $merchantId,
-                        'order_code' => $order->midtrans_order_id ?? $order->id,
+                        'order_code' => $order->order_number,
                     ],
                 ]);
 
@@ -173,6 +173,12 @@ class OrderController extends Controller
         $orders = Order::with('items.menu')
             ->when($request->query('order_status'), fn ($query, $status) => $query->where('order_status', $status))
             ->when($request->query('payment_status'), fn ($query, $status) => $query->where('payment_status', $status))
+            ->when($request->query('start_date'), function ($query, $date) {
+                return $query->whereDate('created_at', '>=', $date);
+            })
+            ->when($request->query('end_date'), function ($query, $date) {
+                return $query->whereDate('created_at', '<=', $date);
+            })
             ->where(function ($query) {
                 $query->where('payment_method', '!=', 'qris')
                     ->orWhere('payment_status', 'dibayar');

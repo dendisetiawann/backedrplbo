@@ -22,6 +22,9 @@ class MenuController extends Controller
         $data = $this->validatedData($request);
         $menu = Menu::create($data);
 
+        // Increment category count
+        $menu->category()->increment('menu_count');
+
         return response()->json($menu->load('category'), 201);
     }
 
@@ -32,15 +35,26 @@ class MenuController extends Controller
 
     public function update(Request $request, Menu $menu)
     {
+        $oldCategoryId = $menu->category_id;
         $data = $this->validatedData($request, $menu->id);
         $menu->update($data);
+
+        // Handle category change
+        if ($oldCategoryId !== $menu->category_id) {
+            \App\Models\Category::where('id', $oldCategoryId)->decrement('menu_count');
+            \App\Models\Category::where('id', $menu->category_id)->increment('menu_count');
+        }
 
         return response()->json($menu->load('category'));
     }
 
     public function destroy(Menu $menu)
     {
+        $categoryId = $menu->category_id;
         $menu->delete();
+
+        // Decrement category count
+        \App\Models\Category::where('id', $categoryId)->decrement('menu_count');
 
         return response()->json([
             'message' => 'Menu berhasil dihapus.',
@@ -50,38 +64,37 @@ class MenuController extends Controller
     private function validatedData(Request $request, ?int $menuId = null): array
     {
         $rules = [
-            'category_id' => ['required'],
-            'name' => ['required', 'string', 'max:255'],
+            'category_id' => ['required', 'exists:categories,id'],
+            'name' => ['required', 'string', 'max:255', 'unique:menus,name,' . $menuId],
             'description' => ['nullable', 'string'],
-            'price' => ['required'],
-            'photo' => ['nullable', 'image', 'max:2048'],
-            'photo_path' => ['nullable', 'string', 'max:2048'],
+            'price' => ['required', 'numeric', 'min:1'],
+            'photo' => ['nullable', 'image', 'mimes:jpg,jpeg,png', 'max:10240'], // Max 10MB
+            'photo_path' => ['nullable', 'string'],
             'is_visible' => ['required'],
         ];
 
-        $data = $request->validate($rules);
+        $data = $request->validate($rules, [
+            'name.unique' => 'Nama menu sudah digunakan.',
+            'price.min' => 'Harga harus lebih dari 0.',
+            'photo.max' => 'Ukuran foto maksimal 10MB.',
+            'photo.mimes' => 'Format foto harus JPG atau PNG.',
+        ]);
 
         if ($request->hasFile('photo')) {
             $path = $request->file('photo')->store('menu_photos', 'public');
             $data['photo_path'] = $path;
             unset($data['photo']);
         } else {
-            $data['photo_path'] = $data['photo_path'] ?? null;
+            // Keep existing photo_path if not uploading new one
+            if ($request->has('photo_path')) {
+                $data['photo_path'] = $request->input('photo_path');
+            }
         }
 
-        // Manual validation & casting after FormData string conversion
-        $categoryId = (int) $data['category_id'];
-        if ($categoryId <= 0) {
-            throw \Illuminate\Validation\ValidationException::withMessages(['category_id' => 'The category id field is required.']);
-        }
-        $price = (int) $data['price'];
-        if ($price < 0) {
-            throw \Illuminate\Validation\ValidationException::withMessages(['price' => 'The price must be at least 0.']);
-        }
-
-        $data['category_id'] = $categoryId;
-        $data['price'] = $price;
-        $data['is_visible'] = in_array(strtolower($data['is_visible']), ['true','1','on'], true);
+        // Cast types
+        $data['category_id'] = (int) $data['category_id'];
+        $data['price'] = (int) $data['price'];
+        $data['is_visible'] = filter_var($data['is_visible'], FILTER_VALIDATE_BOOLEAN);
 
         return $data;
     }

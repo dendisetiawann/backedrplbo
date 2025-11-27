@@ -1,0 +1,13 @@
+Array
+(
+    [0] => Array
+        (
+            [query] => select `categories`.*, (select count(*) from `menus` where `categories`.`id` = `menus`.`category_id`) as `menus_count` from `categories`
+            [bindings] => Array
+                (
+                )
+
+            [time] => 3.49
+        )
+
+)
