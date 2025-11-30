@@ -3,13 +3,13 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Models\User;
+use App\Models\Pengguna;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 
 class AuthController extends Controller
 {
-    public function login(Request $request)
+    public function mengidentifikasiUser(Request $request)
     {
         if (! $request->filled('username') || ! $request->filled('password')) {
             return response()->json([
@@ -17,20 +17,20 @@ class AuthController extends Controller
             ], 422);
         }
 
-        $user = User::where('username', $request->input('username'))->first();
+        $pengguna = Pengguna::where('username', $request->input('username'))->first();
 
-        if (! $user || ! Hash::check($request->input('password'), $user->password)) {
+        if (! $pengguna || ! Hash::check($request->input('password'), $pengguna->password)) {
             return response()->json([
                 'message' => 'Username atau password salah.',
             ], 401);
         }
 
-        $token = $user->createToken('admin-token')->plainTextToken;
+        $token = $pengguna->createToken('admin-token')->plainTextToken;
 
         return response()->json([
             'message' => 'Login berhasil.',
             'token' => $token,
-            'user' => $user,
+            'pengguna' => $pengguna,
         ]);
     }
 

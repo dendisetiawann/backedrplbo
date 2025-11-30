@@ -6,32 +6,29 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-class OrderItem extends Model
+class Payment extends Model
 {
     use HasFactory;
 
     protected $fillable = [
         'order_id',
-        'menu_id',
-        'qty',
-        'price',
-        'subtotal',
-        'note',
+        'method',
+        'status',
+        'amount',
+        'snap_token',
+        'qris_order_id',
+        'paid_at',
     ];
 
     protected $casts = [
-        'qty' => 'integer',
-        'price' => 'integer',
-        'subtotal' => 'integer',
+        'amount' => 'integer',
+        'paid_at' => 'datetime',
     ];
+
+    protected $touches = ['order'];
 
     public function order(): BelongsTo
     {
         return $this->belongsTo(Order::class);
-    }
-
-    public function menu(): BelongsTo
-    {
-        return $this->belongsTo(Menu::class)->withTrashed();
     }
 }

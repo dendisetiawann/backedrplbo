@@ -3,68 +3,79 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Models\Category;
+use App\Models\Kategori;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 
 class CategoryController extends Controller
 {
     public function index()
     {
-        return response()->json(Category::orderBy('name')->get());
+        return response()->json(Kategori::orderBy('nama_kategori')->get());
     }
 
     public function store(Request $request)
     {
         $data = $request->validate([
-            'name' => ['required', 'string', 'max:255', 'unique:categories,name'],
-        ], [
-            'name.required' => 'Nama kategori tidak boleh kosong.',
-            'name.unique' => 'Nama kategori sudah digunakan.',
-        ]);
-
-        $category = Category::create($data);
-
-        return response()->json($category, 201);
-    }
-
-    public function show(Category $category)
-    {
-        return response()->json($category);
-    }
-
-    public function update(Request $request, Category $category)
-    {
-        $data = $request->validate([
-            'name' => [
+            'nama_kategori' => [
                 'required',
                 'string',
-                'max:255',
-                Rule::unique('categories')->ignore($category->id),
+                'max:100',
+                Rule::unique('kategori', 'nama_kategori')->whereNull('tanggal_dihapus'),
             ],
         ], [
-            'name.required' => 'Nama kategori tidak boleh kosong.',
-            'name.unique' => 'Nama kategori sudah digunakan.',
+            'nama_kategori.required' => 'Nama kategori tidak boleh kosong.',
+            'nama_kategori.unique' => 'Nama kategori sudah digunakan.',
         ]);
 
-        $category->update($data);
+        $kategori = Kategori::create($data);
 
-        return response()->json($category);
+        return response()->json($kategori, 201);
     }
 
-    public function destroy(Category $category)
+    public function show(Kategori $kategori)
     {
-        $hasVisibleMenu = $category->menus()
-            ->where('is_visible', true)
+        return response()->json($kategori);
+    }
+
+    public function update(Request $request, Kategori $kategori)
+    {
+        $data = $request->validate([
+            'nama_kategori' => [
+                'required',
+                'string',
+                'max:100',
+                Rule::unique('kategori', 'nama_kategori')
+                    ->ignore($kategori->id_kategori, 'id_kategori')
+                    ->whereNull('tanggal_dihapus'),
+            ],
+        ], [
+            'nama_kategori.required' => 'Nama kategori tidak boleh kosong.',
+            'nama_kategori.unique' => 'Nama kategori sudah digunakan.',
+        ]);
+
+        $kategori->update($data);
+
+        return response()->json($kategori);
+    }
+
+    public function destroy(Kategori $kategori)
+    {
+        $hasActiveMenu = $kategori->menu()
+            ->where('status_visibilitas', true)
             ->exists();
 
-        if ($hasVisibleMenu) {
+        if ($hasActiveMenu) {
             return response()->json([
                 'message' => 'Kategori tidak dapat dihapus karena masih digunakan oleh menu aktif.',
             ], 422);
         }
 
-        $category->delete();
+        DB::transaction(function () use ($kategori) {
+            $kategori->menu()->get()->each->delete();
+            $kategori->delete();
+        });
 
         return response()->json([
             'message' => 'Kategori berhasil dihapus.',

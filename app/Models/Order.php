@@ -4,7 +4,9 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Order extends Model
 {
@@ -12,19 +14,25 @@ class Order extends Model
 
     protected $fillable = [
         'order_number',
-        'customer_name',
-        'table_number',
-        'customer_note',
+        'pelanggan_id',
         'total_amount',
-        'payment_method',
-        'payment_status',
         'order_status',
-        'snap_token',
-        'midtrans_order_id',
     ];
 
     protected $casts = [
         'total_amount' => 'integer',
+    ];
+
+    protected $with = ['payment', 'pelanggan'];
+
+    protected $appends = [
+        'payment_method',
+        'payment_status',
+        'snap_token',
+        'qris_order_id',
+        'customer_name',
+        'table_number',
+        'customer_note',
     ];
 
     protected static function boot()
@@ -68,5 +76,50 @@ class Order extends Model
     public function items(): HasMany
     {
         return $this->hasMany(OrderItem::class);
+    }
+
+    public function payment(): HasOne
+    {
+        return $this->hasOne(Payment::class);
+    }
+
+    public function pelanggan(): BelongsTo
+    {
+        return $this->belongsTo(Pelanggan::class);
+    }
+
+    public function getPaymentMethodAttribute(): ?string
+    {
+        return $this->payment?->method;
+    }
+
+    public function getPaymentStatusAttribute(): ?string
+    {
+        return $this->payment?->status;
+    }
+
+    public function getSnapTokenAttribute(): ?string
+    {
+        return $this->payment?->snap_token;
+    }
+
+    public function getQrisOrderIdAttribute(): ?string
+    {
+        return $this->payment?->qris_order_id;
+    }
+
+    public function getCustomerNameAttribute(): ?string
+    {
+        return $this->pelanggan->name ?? null;
+    }
+
+    public function getTableNumberAttribute(): ?string
+    {
+        return $this->pelanggan->table_number ?? null;
+    }
+
+    public function getCustomerNoteAttribute(): ?string
+    {
+        return $this->pelanggan->customer_note ?? null;
     }
 }

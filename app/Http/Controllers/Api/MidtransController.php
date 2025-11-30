@@ -3,7 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Models\Order;
+use App\Models\Pembayaran;
 use Illuminate\Http\Request;
 use Midtrans\Config;
 use Midtrans\Notification;
@@ -22,30 +22,39 @@ class MidtransController extends Controller
             ], 400);
         }
 
-        $order = Order::where('midtrans_order_id', $notification->order_id)->first();
+        $pembayaran = Pembayaran::where('id_transaksi_qris', $notification->order_id)->first();
 
-        if (! $order) {
+        if (! $pembayaran) {
             return response()->json([
                 'message' => 'Order tidak ditemukan.',
             ], 404);
         }
 
+        $pesanan = $pembayaran->pesanan;
+
         $transactionStatus = $notification->transaction_status;
         $fraudStatus = $notification->fraud_status;
 
-        $paymentStatus = match ($transactionStatus) {
+        $statusPembayaran = match ($transactionStatus) {
             'capture' => $fraudStatus === 'accept' ? 'dibayar' : 'pending',
             'settlement' => 'dibayar',
             'pending' => 'pending',
             'deny', 'cancel', 'expire' => 'gagal',
-            default => $order->payment_status,
+            default => $pembayaran->status_pembayaran,
         };
 
-        $order->update(['payment_status' => $paymentStatus]);
+        $pembayaran->update([
+            'status_pembayaran' => $statusPembayaran,
+            'waktu_dibayar' => $statusPembayaran === 'dibayar' ? now() : null,
+        ]);
+
+        if ($statusPembayaran === 'dibayar' && $pesanan && $pesanan->status_pesanan === 'baru') {
+            $pesanan->update(['status_pesanan' => 'diproses']);
+        }
 
         return response()->json([
             'message' => 'Notifikasi Midtrans diproses.',
-            'order' => $order,
+            'order' => $pesanan->fresh(['items.menu', 'pembayaran']),
         ]);
     }
 

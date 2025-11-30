@@ -4,10 +4,10 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Menu;
-use App\Models\Order;
+use App\Models\Pelanggan;
+use App\Models\Pesanan;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Xendit\Configuration;
@@ -19,9 +19,9 @@ class OrderController extends Controller
     public function publicMenus()
     {
         return response()->json(
-            Menu::with('category')
-                ->where('is_visible', true)
-                ->orderBy('name')
+            Menu::with('kategori')
+                ->where('status_visibilitas', true)
+                ->orderBy('nama_menu')
                 ->get()
         );
     }
@@ -35,192 +35,228 @@ class OrderController extends Controller
         }
 
         $validated = $request->validate([
-            'customer_name' => ['required', 'string', 'max:255'],
-            'table_number' => ['required', 'string', 'max:50'],
+            'customer_name' => ['required', 'string', 'max:100'],
+            'table_number' => ['required', 'string', 'max:10'],
             'customer_note' => ['nullable', 'string'],
             'payment_method' => ['required', Rule::in(['cash', 'qris'])],
             'items' => ['required', 'array', 'min:1'],
-            'items.*.menu_id' => ['required', 'integer', 'exists:menus,id'],
+            'items.*.menu_id' => ['required', 'integer', 'exists:menu,id_menu'],
             'items.*.qty' => ['required', 'integer', 'min:1'],
-            'items.*.note' => ['nullable', 'string'],
         ]);
 
         $checkoutUrl = null;
 
-        $order = DB::transaction(function () use ($validated, &$checkoutUrl) {
+        $pesanan = DB::transaction(function () use ($validated, &$checkoutUrl) {
             $items = collect($validated['items']);
-            $menuMap = Menu::whereIn('id', $items->pluck('menu_id'))
+            $menuMap = Menu::whereIn('id_menu', $items->pluck('menu_id'))
                 ->get()
-                ->keyBy('id');
+                ->keyBy('id_menu');
 
-            $totalAmount = 0;
+            $totalHarga = 0;
             $preparedItems = [];
 
             foreach ($items as $item) {
                 $menu = $menuMap->get($item['menu_id']);
 
-                if (! $menu || ! $menu->is_visible) {
+                if (! $menu || ! $menu->status_visibilitas) {
                     throw ValidationException::withMessages([
                         'items' => 'Menu tidak tersedia.',
                     ]);
                 }
 
                 $qty = $item['qty'];
-                $subtotal = $menu->price * $qty;
-                $totalAmount += $subtotal;
+                $subtotal = $menu->harga_menu * $qty;
+                $totalHarga += $subtotal;
 
                 $preparedItems[] = [
-                    'menu_id' => $menu->id,
-                    'qty' => $qty,
-                    'price' => $menu->price,
+                    'id_menu' => $menu->id_menu,
+                    'quantity' => $qty,
+                    'harga_itempesanan' => $menu->harga_menu,
                     'subtotal' => $subtotal,
-                    'note' => $item['note'] ?? null,
                 ];
             }
 
-            $order = Order::create([
-                'customer_name' => $validated['customer_name'],
-                'table_number' => $validated['table_number'],
-                'customer_note' => $validated['customer_note'] ?? null,
-                'total_amount' => $totalAmount,
-                'payment_method' => $validated['payment_method'],
-                'payment_status' => $validated['payment_method'] === 'cash' ? 'belum_bayar' : 'pending',
-                'order_status' => 'baru',
+            $pelanggan = Pelanggan::firstOrCreate(
+                [
+                    'nama_pelanggan' => $validated['customer_name'],
+                    'nomor_meja' => $validated['table_number'],
+                ],
+                [
+                    'catatan_pelanggan' => $validated['customer_note'] ?? null,
+                ]
+            );
+
+            if (! empty($validated['customer_note']) && $pelanggan->catatan_pelanggan !== $validated['customer_note']) {
+                $pelanggan->update([
+                    'catatan_pelanggan' => $validated['customer_note'],
+                ]);
+            }
+
+            $pesanan = Pesanan::create([
+                'id_pelanggan' => $pelanggan->id_pelanggan,
+                'total_harga' => $totalHarga,
+                'status_pesanan' => 'baru',
             ]);
 
-            $order->items()->createMany($preparedItems);
+            $pesanan->items()->createMany($preparedItems);
+
+            $pembayaran = $pesanan->pembayaran()->create([
+                'metode_pembayaran' => $validated['payment_method'],
+                'status_pembayaran' => $validated['payment_method'] === 'cash' ? 'belum_bayar' : 'pending',
+                'jumlah_pembayaran' => $totalHarga,
+            ]);
 
             if ($validated['payment_method'] === 'qris') {
                 Configuration::setXenditKey(config('services.xendit.secret_key'));
                 $invoiceApi = new InvoiceApi();
                 $merchantId = config('services.xendit.merchant_id', '9988123');
 
-                $externalId = $order->order_number;
+                $externalId = $pesanan->nomor_pesanan;
                 $requestBody = new CreateInvoiceRequest([
                     'external_id' => $externalId,
-                    'description' => 'Pembayaran Pesanan ' . $order->order_number . ' - ' . $order->customer_name,
-                    'amount' => $totalAmount,
+                    'description' => 'Pembayaran Pesanan ' . $pesanan->nomor_pesanan . ' - ' . ($pesanan->nama_pelanggan ?? $pelanggan->nama_pelanggan),
+                    'amount' => $totalHarga,
                     'currency' => 'IDR',
                     'success_redirect_url' => config('services.xendit.success_url'),
                     'failure_redirect_url' => config('services.xendit.failure_url'),
                     'metadata' => [
                         'merchant_id' => $merchantId,
-                        'order_code' => $order->order_number,
+                        'order_code' => $pesanan->nomor_pesanan,
                     ],
                 ]);
 
                 $invoice = $invoiceApi->createInvoice($requestBody);
 
-                $order->update([
-                    'snap_token' => $invoice->getInvoiceUrl(),
-                    'midtrans_order_id' => $externalId,
+                $pembayaran->update([
+                    'token_pembayaran' => $invoice->getInvoiceUrl(),
+                    'id_transaksi_qris' => $externalId,
                 ]);
 
                 $checkoutUrl = $invoice->getInvoiceUrl();
             }
 
-            return $order->fresh('items.menu');
+            return $pesanan->fresh(['items.menu', 'pembayaran', 'pelanggan']);
         });
 
         return response()->json([
-            'message' => $order->payment_method === 'cash'
+            'message' => $pesanan->metode_pembayaran === 'cash'
                 ? 'Pesanan diterima, silakan bayar di kasir dengan menunjukkan nomor pesanan anda.'
                 : 'Pesanan berhasil dibuat. Lanjutkan pembayaran QRIS.',
-            'order' => $order,
+            'order' => $pesanan,
             'snap_token' => $checkoutUrl,
         ], 201);
     }
 
-    public function publicShow(Order $order)
+    public function publicShow(Pesanan $pesanan)
     {
-        return response()->json($order->load('items.menu'));
+        return response()->json($pesanan->load(['items.menu', 'pembayaran', 'pelanggan']));
     }
 
-    public function publicMarkPaid(Request $request, Order $order)
+    public function publicMarkPaid(Request $request, Pesanan $pesanan)
     {
-        if ($order->payment_method !== 'qris') {
+        $pembayaran = $pesanan->pembayaran;
+
+        if (! $pembayaran || $pembayaran->metode_pembayaran !== 'qris') {
             return response()->json([
                 'message' => 'Metode pembayaran tidak mendukung pembaruan otomatis.',
             ], 422);
         }
 
-        $updates = [];
+        $paymentUpdates = [];
+        $orderUpdates = [];
         $message = 'Pembayaran berhasil ditandai lunas.';
 
-        if ($order->payment_status !== 'dibayar') {
-            $updates['payment_status'] = 'dibayar';
+        if ($pembayaran->status_pembayaran !== 'dibayar') {
+            $paymentUpdates['status_pembayaran'] = 'dibayar';
+            $paymentUpdates['waktu_dibayar'] = now();
         } else {
             $message = 'Pembayaran sudah ditandai lunas.';
         }
 
-        if ($order->order_status === 'baru') {
-            $updates['order_status'] = 'diproses';
+        if ($pesanan->status_pesanan === 'baru') {
+            $orderUpdates['status_pesanan'] = 'diproses';
             $message = 'Pembayaran berhasil diverifikasi dan pesanan mulai diproses.';
         }
 
-        if (! empty($updates)) {
-            $order->update($updates);
+        if (! empty($paymentUpdates)) {
+            $pembayaran->update($paymentUpdates);
+        }
+
+        if (! empty($orderUpdates)) {
+            $pesanan->update($orderUpdates);
         }
 
         return response()->json([
             'message' => $message,
-            'order' => $order->load('items.menu'),
+            'order' => $pesanan->load(['items.menu', 'pembayaran', 'pelanggan']),
         ]);
     }
 
     public function index(Request $request)
     {
-        $orders = Order::with('items.menu')
-            ->when($request->query('order_status'), fn ($query, $status) => $query->where('order_status', $status))
-            ->when($request->query('payment_status'), fn ($query, $status) => $query->where('payment_status', $status))
+        $pesananList = Pesanan::with(['items.menu', 'pembayaran', 'pelanggan'])
+            ->when($request->query('order_status'), fn ($query, $status) => $query->where('status_pesanan', $status))
+            ->when($request->query('payment_status'), function ($query, $status) {
+                $query->whereHas('pembayaran', fn ($paymentQuery) => $paymentQuery->where('status_pembayaran', $status));
+            })
             ->when($request->query('start_date'), function ($query, $date) {
-                return $query->whereDate('created_at', '>=', $date);
+                return $query->whereDate('tanggal_dibuat', '>=', $date);
             })
             ->when($request->query('end_date'), function ($query, $date) {
-                return $query->whereDate('created_at', '<=', $date);
+                return $query->whereDate('tanggal_dibuat', '<=', $date);
             })
             ->where(function ($query) {
-                $query->where('payment_method', '!=', 'qris')
-                    ->orWhere('payment_status', 'dibayar');
+                $query->whereHas('pembayaran', fn ($paymentQuery) => $paymentQuery->where('metode_pembayaran', '!=', 'qris'))
+                    ->orWhereHas('pembayaran', fn ($paymentQuery) => $paymentQuery->where('status_pembayaran', 'dibayar'));
             })
-            ->orderByDesc('created_at')
+            ->orderByDesc('tanggal_dibuat')
             ->get();
 
-        return response()->json($orders);
+        return response()->json($pesananList);
     }
 
-    public function show(Order $order)
+    public function show(Pesanan $pesanan)
     {
-        return response()->json($order->load('items.menu'));
+        return response()->json($pesanan->load(['items.menu', 'pembayaran', 'pelanggan']));
     }
 
-    public function updateStatus(Request $request, Order $order)
+    public function updateStatus(Request $request, Pesanan $pesanan)
     {
         $validated = $request->validate([
-            'order_status' => ['required', Rule::in(['baru', 'diproses', 'selesai'])],
+            'status_pesanan' => ['required', Rule::in(['baru', 'diproses', 'selesai'])],
         ]);
 
-        $order->update(['order_status' => $validated['order_status']]);
+        $pesanan->update(['status_pesanan' => $validated['status_pesanan']]);
 
         return response()->json([
             'message' => 'Status pesanan diperbarui.',
-            'order' => $order->load('items.menu'),
+            'order' => $pesanan->load(['items.menu', 'pembayaran', 'pelanggan']),
         ]);
     }
 
-    public function updatePaymentStatus(Request $request, Order $order)
+    public function updatePaymentStatus(Request $request, Pesanan $pesanan)
     {
         $validated = $request->validate([
-            'payment_status' => ['required', Rule::in(['belum_bayar', 'pending', 'dibayar', 'gagal'])],
+            'status_pembayaran' => ['required', Rule::in(['belum_bayar', 'pending', 'dibayar', 'gagal'])],
         ]);
 
-        $order->update(['payment_status' => $validated['payment_status']]);
+        $pembayaran = $pesanan->pembayaran;
+
+        if (! $pembayaran) {
+            return response()->json([
+                'message' => 'Data pembayaran tidak ditemukan.',
+            ], 422);
+        }
+
+        $pembayaran->update([
+            'status_pembayaran' => $validated['status_pembayaran'],
+            'waktu_dibayar' => $validated['status_pembayaran'] === 'dibayar' ? now() : null,
+        ]);
 
         return response()->json([
             'message' => 'Status pembayaran diperbarui.',
-            'order' => $order->load('items.menu'),
+            'order' => $pesanan->load(['items.menu', 'pembayaran', 'pelanggan']),
         ]);
     }
-
 }
 

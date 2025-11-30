@@ -2,7 +2,7 @@
 
 namespace Database\Seeders;
 
-use App\Models\User;
+use App\Models\Pengguna;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
 
@@ -10,12 +10,11 @@ class AdminUserSeeder extends Seeder
 {
     public function run(): void
     {
-        User::updateOrCreate(
+        Pengguna::updateOrCreate(
             ['username' => 'admin_budi'],
             [
-                'name' => 'Budi Santoso',
+                'nama_pengguna' => 'Budi Santoso',
                 'password' => Hash::make('12345'),
-                'role' => 'admin',
             ]
         );
     }
