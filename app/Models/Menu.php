@@ -21,8 +21,7 @@ class Menu extends Model
         return 'id_menu';
     }
 
-    const CREATED_AT = 'tanggal_dibuat';
-    const UPDATED_AT = 'tanggal_diubah';
+    public $timestamps = false;
     const DELETED_AT = 'tanggal_dihapus';
 
     protected $fillable = [
@@ -47,5 +46,52 @@ class Menu extends Model
     public function itemPesanan(): HasMany
     {
         return $this->hasMany(ItemPesanan::class, 'id_menu', 'id_menu');
+    }
+
+    public static function tambahMenu(array $data): self
+    {
+        $menu = self::create($data);
+        $menu->kategori()->increment('jumlah_menu');
+
+        return $menu->load('kategori');
+    }
+
+    public static function editMenu(self $menu, array $data): self
+    {
+        $oldKategoriId = $menu->id_kategori;
+        $menu->update($data);
+
+        if ($oldKategoriId !== $menu->id_kategori) {
+            Kategori::where('id_kategori', $oldKategoriId)->decrement('jumlah_menu');
+            Kategori::where('id_kategori', $menu->id_kategori)->increment('jumlah_menu');
+        }
+
+        return $menu->load('kategori');
+    }
+
+    public static function hapusMenu(self $menu): void
+    {
+        $kategoriId = $menu->id_kategori;
+        $menu->delete();
+
+        Kategori::where('id_kategori', $kategoriId)->decrement('jumlah_menu');
+    }
+
+    public static function ubahVisibilitas(self $menu, bool $status): self
+    {
+        $menu->update(['status_visibilitas' => $status]);
+
+        return $menu->fresh();
+    }
+
+    public static function ambilDataMenu(?int $menuId = null)
+    {
+        $query = self::with('kategori')->orderBy('nama_menu');
+
+        if ($menuId !== null) {
+            return $query->where('id_menu', $menuId)->first();
+        }
+
+        return $query->get();
     }
 }

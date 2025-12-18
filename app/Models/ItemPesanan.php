@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Arr;
 
 class ItemPesanan extends Model
 {
@@ -14,8 +15,7 @@ class ItemPesanan extends Model
 
     protected $primaryKey = 'id_itempesanan';
 
-    const CREATED_AT = 'tanggal_dibuat';
-    const UPDATED_AT = 'tanggal_diubah';
+    public $timestamps = false;
 
     protected $fillable = [
         'id_pesanan',
@@ -39,5 +39,23 @@ class ItemPesanan extends Model
     public function menu(): BelongsTo
     {
         return $this->belongsTo(Menu::class, 'id_menu', 'id_menu')->withTrashed();
+    }
+
+    public static function simpanDataItemPesanan(array $attributes): self
+    {
+        $data = Arr::only($attributes, [
+            'id_pesanan',
+            'id_menu',
+            'quantity',
+            'harga_itempesanan',
+            'subtotal',
+        ]);
+
+        return static::create($data);
+    }
+
+    public static function ambilDataItemPesanan(int|string $id): ?self
+    {
+        return static::with('menu')->find($id);
     }
 }

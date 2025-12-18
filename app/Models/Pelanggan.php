@@ -14,8 +14,7 @@ class Pelanggan extends Model
 
     protected $primaryKey = 'id_pelanggan';
 
-    const CREATED_AT = 'tanggal_dibuat';
-    const UPDATED_AT = 'tanggal_diubah';
+    public $timestamps = false;
 
     protected $fillable = [
         'nama_pelanggan',

@@ -17,8 +17,7 @@ class Pengguna extends Authenticatable
 
     protected $primaryKey = 'id_pengguna';
 
-    const CREATED_AT = 'tanggal_dibuat';
-    const UPDATED_AT = 'tanggal_diubah';
+    public $timestamps = false;
 
     protected $fillable = [
         'nama_pengguna',

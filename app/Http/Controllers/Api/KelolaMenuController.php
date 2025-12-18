@@ -8,62 +8,44 @@ use App\Models\Menu;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 
-class MenuController extends Controller
+class KelolaMenuController extends Controller
 {
-    public function index()
+    public function ambilSemuaMenu()
     {
-        $menus = Menu::with('kategori')
-            ->orderBy('nama_menu')
-            ->get();
-
-        return response()->json($menus);
+        return response()->json(Menu::ambilDataMenu());
     }
 
     public function store(Request $request)
     {
-        $data = $this->validatedData($request);
-        $menu = Menu::create($data);
+        $data = $this->validasiInputanKelolaMenu($request);
+        $menu = Menu::tambahMenu($data);
 
-        // Increment category count
-        $menu->kategori()->increment('jumlah_menu');
-
-        return response()->json($menu->load('kategori'), 201);
+        return response()->json($menu, 201);
     }
 
-    public function show(Menu $menu)
+    public function cekMenu(Menu $menu)
     {
-        return response()->json($menu->load('kategori'));
+        return response()->json(Menu::ambilDataMenu($menu->id_menu));
     }
 
     public function update(Request $request, Menu $menu)
     {
-        $oldKategoriId = $menu->id_kategori;
-        $data = $this->validatedData($request, $menu->id_menu);
-        $menu->update($data);
+        $data = $this->validasiInputanKelolaMenu($request, $menu->id_menu);
+        $updatedMenu = Menu::editMenu($menu, $data);
 
-        // Handle category change
-        if ($oldKategoriId !== $menu->id_kategori) {
-            Kategori::where('id_kategori', $oldKategoriId)->decrement('jumlah_menu');
-            Kategori::where('id_kategori', $menu->id_kategori)->increment('jumlah_menu');
-        }
-
-        return response()->json($menu->load('kategori'));
+        return response()->json($updatedMenu);
     }
 
     public function destroy(Menu $menu)
     {
-        $kategoriId = $menu->id_kategori;
-        $menu->delete();
-
-        // Decrement category count
-        Kategori::where('id_kategori', $kategoriId)->decrement('jumlah_menu');
+        Menu::hapusMenu($menu);
 
         return response()->json([
             'message' => 'Menu berhasil dihapus.',
         ]);
     }
 
-    private function validatedData(Request $request, ?int $menuId = null): array
+    private function validasiInputanKelolaMenu(Request $request, ?int $menuId = null): array
     {
         $rules = [
             'id_kategori' => ['required', 'exists:kategori,id_kategori'],

@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Support\Arr;
 
 class Pesanan extends Model
 {
@@ -21,8 +22,7 @@ class Pesanan extends Model
         return 'id_pesanan';
     }
 
-    const CREATED_AT = 'tanggal_dibuat';
-    const UPDATED_AT = 'tanggal_diubah';
+    public $timestamps = false;
 
     protected $fillable = [
         'nomor_pesanan',
@@ -130,5 +130,22 @@ class Pesanan extends Model
     public function getCatatanPelangganAttribute(): ?string
     {
         return $this->pelanggan->catatan_pelanggan ?? null;
+    }
+
+    public static function simpanDataPesanan(array $attributes): self
+    {
+        $data = Arr::only($attributes, [
+            'nomor_pesanan',
+            'id_pelanggan',
+            'total_harga',
+            'status_pesanan',
+        ]);
+
+        return static::create($data);
+    }
+
+    public static function ambilDataPesanan(int|string $id): ?self
+    {
+        return static::with(['items.menu', 'pembayaran', 'pelanggan'])->find($id);
     }
 }

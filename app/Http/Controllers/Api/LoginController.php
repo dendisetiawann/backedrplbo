@@ -7,9 +7,9 @@ use App\Models\Pengguna;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 
-class AuthController extends Controller
+class LoginController extends Controller
 {
-    public function mengidentifikasiUser(Request $request)
+    public function kirimDataLogin(Request $request)
     {
         if (! $request->filled('username') || ! $request->filled('password')) {
             return response()->json([
@@ -17,9 +17,12 @@ class AuthController extends Controller
             ], 422);
         }
 
-        $pengguna = Pengguna::where('username', $request->input('username'))->first();
+        $pengguna = $this->mengidentifikasiUser(
+            $request->input('username'),
+            $request->input('password')
+        );
 
-        if (! $pengguna || ! Hash::check($request->input('password'), $pengguna->password)) {
+        if (! $pengguna) {
             return response()->json([
                 'message' => 'Username atau password salah.',
             ], 401);
@@ -37,5 +40,16 @@ class AuthController extends Controller
     public function me(Request $request)
     {
         return response()->json($request->user());
+    }
+
+    private function mengidentifikasiUser(string $username, string $password): ?Pengguna
+    {
+        $pengguna = Pengguna::where('username', $username)->first();
+
+        if (! $pengguna || ! Hash::check($password, $pengguna->password)) {
+            return null;
+        }
+
+        return $pengguna;
     }
 }
